@@ -21,7 +21,7 @@ Please follow the instructions on the relevant notebooks for the training, predi
   (_pre-trained weights for baseline submission included_)
 
 # Results
-![sample_predictions](images/predictions.png)
+![sample_predictions](/images/predictions.png)
 
 # Citation
 ```
