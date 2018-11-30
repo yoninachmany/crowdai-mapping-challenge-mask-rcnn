@@ -16,12 +16,11 @@ class SpaceNetChallengeDataset(utils.Dataset):
                                or if only a small subset of the same should be loaded into memory
         """
         self.load_small = load_small
-        if self.load_small:
-            annotation_path = os.path.join(dataset_dir, "annotation-small.json")
-        else:
-            annotation_path = os.path.join(dataset_dir, "annotation.json")
+        # TODO: add load_small functionality
 
-        image_dir = os.path.join(dataset_dir, "images")
+        processed_path = os.path.join(dataset_dir, "processedBuildingLabels/")
+        annotation_path = os.path.join(processed_path, "vectordata/summarydata/AOI_1_RIO_polygons_solution_3band.csv")
+        image_dir = os.path.join(processed_path, "3band")
         print("Annotation Path ", annotation_path)
         print("Image Dir ", image_dir)
         assert os.path.exists(annotation_path) and os.path.exists(image_dir)
