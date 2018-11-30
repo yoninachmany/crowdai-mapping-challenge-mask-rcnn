@@ -1,9 +1,10 @@
 from mrcnn import utils
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
-from pycocotools.coco import COCO
-from pycocotools.cocoeval import COCOeval
-from pycocotools import mask as maskUtils
+from shapely.wkt import loads
+from matplotlib.path import Path
 
 import os
 
@@ -12,12 +13,7 @@ class SpaceNetChallengeDataset(utils.Dataset):
         """ Loads dataset released for the SpaceNet Building Challenge(https://spacenetchallenge.github.io/Challenges/Challenge-1.html)
             Params:
                 - dataset_dir : root directory of the dataset (can point to the train/val folder)
-                - load_small : Boolean value which signals if the annotations for all the images need to be loaded into the memory,
-                               or if only a small subset of the same should be loaded into memory
         """
-        self.load_small = load_small
-        # TODO: add load_small functionality
-
         processed_path = os.path.join(dataset_dir, "processedBuildingLabels/")
         annotation_path = os.path.join(processed_path, "vectordata/summarydata/AOI_1_RIO_polygons_solution_3band.csv")
         image_dir = os.path.join(processed_path, "3band")
@@ -25,34 +21,20 @@ class SpaceNetChallengeDataset(utils.Dataset):
         print("Image Dir ", image_dir)
         assert os.path.exists(annotation_path) and os.path.exists(image_dir)
 
-        self.coco = COCO(annotation_path)
-        self.image_dir = image_dir
+        # Register building class.
+        self.add_class("spacenet-rio", 1, "building")
 
-        # Load all classes (Only Building in this version)
-        classIds = self.coco.getCatIds()
-
-        # Load all images
-        image_ids = list(self.coco.imgs.keys())
-
-        # register classes
-        for _class_id in classIds:
-            self.add_class("spacenet-rio", _class_id, self.coco.loadCats(_class_id)[0]["name"])
+        # Load building annotations as DataFrame, dropping empty polygons.
+        df = pd.read_csv(annotation_path, na_values="-1").dropna()
 
         # Register Images
-        for _img_id in image_ids:
-            assert(os.path.exists(os.path.join(image_dir, self.coco.imgs[_img_id]['file_name'])))
+        for image_id, group in df.groupby('ImageId'):
+            path = os.path.join(image_dir, "3band_{}.tif".format(image_id))
+            height, width = plt.imread(path).shape[:2]
+            polygons = [loads(wkt) for wkt in group['PolygonWKT_Pix']]
             self.add_image(
-                "spacenet-rio", image_id=_img_id,
-                path=os.path.join(image_dir, self.coco.imgs[_img_id]['file_name']),
-                width=self.coco.imgs[_img_id]["width"],
-                height=self.coco.imgs[_img_id]["height"],
-                annotations=self.coco.loadAnns(self.coco.getAnnIds(
-                                            imgIds=[_img_id],
-                                            catIds=classIds,
-                                            iscrowd=None)))
-
-        if return_coco:
-            return self.coco
+                "spacenet-rio", image_id=image_id, path=path,
+                height=height, width=width, polygons=polygons)
 
     def load_mask(self, image_id):
         """ Loads instance mask for a given image
@@ -73,15 +55,27 @@ class SpaceNetChallengeDataset(utils.Dataset):
 
         instance_masks = []
         class_ids = []
-        annotations = self.image_info[image_id]["annotations"]
+        polygons = image_info["polygons"]
         # Build mask of shape [height, width, instance_count] and list
         # of class IDs that correspond to each channel of the mask.
-        for annotation in annotations:
-            class_id = self.map_source_class_id(
-                "spacenet-rio.{}".format(annotation['category_id']))
+        for polygon in polygons:
+            class_id = self.map_source_class_id("spacenet-rio.1")
             if class_id:
-                m = self.annToMask(annotation,  image_info["height"],
-                                                image_info["width"])
+                # Polygon to binary mask: https://stackoverflow.com/a/36759414.
+                nx, ny = image_info["width"], image_info["height"]
+                coords = [coord[:2] for coord in list(polygon.exterior.coords)]
+
+                # Create vertex coordinates for each grid cell...
+                # (<0,0> is at the top left of the grid in this system)
+                x, y = np.meshgrid(np.arange(nx), np.arange(ny))
+                x, y = x.flatten(), y.flatten()
+
+                points = np.vstack((x, y)).T
+
+                path = Path(coords)
+                grid = path.contains_points(points)
+                m = grid.reshape((ny, nx))
+
                 # Some objects are so small that they're less than 1 pixel area
                 # and end up rounded out. Skip those objects.
                 if m.max() < 1:
@@ -99,7 +93,7 @@ class SpaceNetChallengeDataset(utils.Dataset):
             return mask, class_ids
         else:
             # Call super class to return an empty mask
-            return super(MappingChallengeDataset, self).load_mask(image_id)
+            return super(SpaceNetChallengeDataset, self).load_mask(image_id)
 
 
     def image_reference(self, image_id):
@@ -109,32 +103,3 @@ class SpaceNetChallengeDataset(utils.Dataset):
             but in this case, we will simply return the image_id
         """
         return "spacenet-rio::{}".format(image_id)
-    # The following two functions are from pycocotools with a few changes.
-
-    def annToRLE(self, ann, height, width):
-        """
-        Convert annotation which can be polygons, uncompressed RLE to RLE.
-        :return: binary mask (numpy 2D array)
-        """
-        segm = ann['segmentation']
-        if isinstance(segm, list):
-            # polygon -- a single object might consist of multiple parts
-            # we merge all parts into one mask rle code
-            rles = maskUtils.frPyObjects(segm, height, width)
-            rle = maskUtils.merge(rles)
-        elif isinstance(segm['counts'], list):
-            # uncompressed RLE
-            rle = maskUtils.frPyObjects(segm, height, width)
-        else:
-            # rle
-            rle = ann['segmentation']
-        return rle
-
-    def annToMask(self, ann, height, width):
-        """
-        Convert annotation which can be polygons, uncompressed RLE, or RLE to binary mask.
-        :return: binary mask (numpy 2D array)
-        """
-        rle = self.annToRLE(ann, height, width)
-        m = maskUtils.decode(rle)
-        return m
