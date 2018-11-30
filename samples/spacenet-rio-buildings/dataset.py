@@ -26,15 +26,38 @@ class SpaceNetChallengeDataset(utils.Dataset):
 
         # Load building annotations as DataFrame, dropping empty polygons.
         df = pd.read_csv(annotation_path, na_values="-1").dropna()
+        print("Number of unique buildings: {}".format(len(df)))
 
         # Register Images
-        for image_id, group in df.groupby('ImageId'):
+        grouped = df.groupby('ImageId')
+        print("Number of unique images with buildings: {}".format(len(grouped)))
+        rgb_means = []
+        counts = []
+        widths = []
+        heights = []
+        for image_id, group in grouped:
             path = os.path.join(image_dir, "3band_{}.tif".format(image_id))
-            height, width = plt.imread(path).shape[:2]
+            image = plt.imread(path)
+            height, width = image.shape[:2]
+            rgb_mean = np.mean(image.reshape((-1, 3)), axis=0)
+            rgb_means.append(rgb_mean)
             polygons = [loads(wkt) for wkt in group['PolygonWKT_Pix']]
+            counts.append(len(polygons))
+            bounds = [polygon.bounds for polygon in polygons]
+            x_diffs = [bound[2] - bound[0] for bound in bounds]
+            y_diffs = [bound[3] - bound[1] for bound in bounds]
+            widths.extend(x_diffs)
+            heights.extend(y_diffs)
             self.add_image(
                 "spacenet-rio", image_id=image_id, path=path,
                 height=height, width=width, polygons=polygons)
+        print("RGB mean: {}".format(np.mean(rgb_means, axis=0)))
+        print("Counts:")
+        print(pd.Series(counts).describe())
+        print("Widths:")
+        print(pd.Series(widths).describe())
+        print("Heights:")
+        print(pd.Series(heights).describe())
 
     def load_mask(self, image_id):
         """ Loads instance mask for a given image
