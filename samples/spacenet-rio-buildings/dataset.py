@@ -26,16 +26,13 @@ class SpaceNetChallengeDataset(utils.Dataset):
 
         # Load building annotations as DataFrame, dropping empty polygons.
         df = pd.read_csv(annotation_path, na_values="-1").dropna()
-        print("Number of unique buildings: {}".format(len(df)))
 
         # Register Images
-        grouped = df.groupby('ImageId')
-        print("Number of unique images with buildings: {}".format(len(grouped)))
         rgb_means = []
         counts = []
         widths = []
         heights = []
-        for image_id, group in grouped:
+        for image_id, group in df.groupby('ImageId'):
             path = os.path.join(image_dir, "3band_{}.tif".format(image_id))
             image = plt.imread(path)
             height, width = image.shape[:2]
@@ -52,12 +49,12 @@ class SpaceNetChallengeDataset(utils.Dataset):
                 "spacenet-rio", image_id=image_id, path=path,
                 height=height, width=width, polygons=polygons)
         print("RGB mean: {}".format(np.mean(rgb_means, axis=0)))
-        print("Counts:")
+        print("Building Counts:")
         print(pd.Series(counts).describe())
-        print("Widths:")
-        print(pd.Series(widths).describe())
-        print("Heights:")
-        print(pd.Series(heights).describe())
+        print("Building Widths (m):")
+        print(pd.Series(np.array(widths)/2).describe())
+        print("Building Heights (m):")
+        print(pd.Series(np.array(heights)/2).describe())
 
     def load_mask(self, image_id):
         """ Loads instance mask for a given image
