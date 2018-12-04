@@ -47,7 +47,7 @@ class SpaceNetChallengeConfig(Config):
     # POST_NMS_ROIS_INFERENCE = 2048
     # TRAIN_ROIS_PER_IMAGE = 512
     # MAX_GT_INSTANCES = 256
-    # DETECTION_MAX_INSTANCES = 400
+    DETECTION_MAX_INSTANCES = 400
 
     # 4th place (DeepGlobe): http://openaccess.thecvf.com/CVPR2018_workshops/CVPR2018_W4.py
     # "However, the hyper-parameters MINI_MASK_SHAPE...are found to largely affect the overall detection performance.
