@@ -1687,10 +1687,19 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
                                              config.RPN_ANCHOR_STRIDE)
 
     # Keras requires a generator to run indefinitely.
+    # Trick to repeat same image for augmentation: https://github.com/matterport/Mask_RCNN/issues/768#issuecomment-405123559
+    state = 0
     while True:
         try:
             # Increment index to pick next image. Shuffle if at the start of an epoch.
-            image_index = (image_index + 1) % len(image_ids)
+            state += 1
+            if image_index == -1 or not augmentation:
+                image_index = (image_index + 1) % len(image_ids)
+            else:
+                if state == 10:
+                    state = 0
+                    image_index = (image_index + 1) % len(image_ids)
+
             if shuffle and image_index == 0:
                 np.random.shuffle(image_ids)
 
