@@ -14,7 +14,11 @@ class SpaceNetChallengeConfig(Config):
     NAME = "spacenet-rio-buildings"
 
     # Uncomment to train on 8 GPUs (default is 1)
-    # GPU_COUNT = 8
+    GPU_COUNT = 2
+    
+    # Inria settings: https://project.inria.fr/aerialimagelabeling/files/2018/01/fp_ohleyer_compressed.pdf
+    STEPS_PER_EPOCH = 90
+    VALIDATION_STEPS = 20
 
     # We use a GPU with 12GB memory, which can fit six images?
     # Adjust down if you use a smaller GPU.
